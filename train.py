@@ -14,17 +14,11 @@ from torchvision.transforms import transforms
 import numpy as np
 import common_args
 import random
-from dataset import Dataset, ImageDataset
-from net import Transformer, ImageTransformer
+from dataset import Dataset
+from net import Transformer
 from utils import (
     build_bandit_data_filename,
     build_bandit_model_filename,
-    build_linear_bandit_data_filename,
-    build_linear_bandit_model_filename,
-    build_darkroom_data_filename,
-    build_darkroom_model_filename,
-    build_miniworld_data_filename,
-    build_miniworld_model_filename,
     worker_init_fn,
 )
 
@@ -45,6 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0)
 
     args = vars(parser.parse_args())
+    # args = vars(parser.parse_args(args=[]))
     print("Args: ", args)
 
     env = args['env']
@@ -81,9 +76,6 @@ if __name__ == '__main__':
     np.random.seed(tmp_seed)
     random.seed(tmp_seed)
 
-    if shuffle and env == 'linear_bandit':
-        raise Exception("Are you sure you want to shuffle on the linear bandit? Data collected from an adaptive algorithm in a stochastic setting can bias the learner if shuffled.")
-
     dataset_config = {
         'n_hists': n_hists,
         'n_samples': n_samples,
@@ -116,67 +108,6 @@ if __name__ == '__main__':
         model_config.update({'var': var, 'cov': cov})
         filename = build_bandit_model_filename(env, model_config)
 
-    elif env == 'bandit_thompson':
-        state_dim = 1
-
-        dataset_config.update({'var': var, 'cov': cov, 'type': 'bernoulli'})
-        path_train = build_bandit_data_filename(
-            env, n_envs, dataset_config, mode=0)
-        path_test = build_bandit_data_filename(
-            env, n_envs, dataset_config, mode=1)
-
-        model_config.update({'var': var, 'cov': cov})
-        filename = build_bandit_model_filename(env, model_config)
-
-    elif env == 'linear_bandit':
-        state_dim = 1
-
-        dataset_config.update({'lin_d': lin_d, 'var': var, 'cov': cov})
-        path_train = build_linear_bandit_data_filename(
-            env, n_envs, dataset_config, mode=0)
-        path_test = build_linear_bandit_data_filename(
-            env, n_envs, dataset_config, mode=1)
-
-        model_config.update({'lin_d': lin_d, 'var': var, 'cov': cov})
-        filename = build_linear_bandit_model_filename(env, model_config)
-
-    elif env.startswith('darkroom'):
-        state_dim = 2
-        action_dim = 5
-
-        dataset_config.update({'rollin_type': 'uniform'})
-        path_train = build_darkroom_data_filename(
-            env, n_envs, dataset_config, mode=0)
-        path_test = build_darkroom_data_filename(
-            env, n_envs, dataset_config, mode=1)
-
-        filename = build_darkroom_model_filename(env, model_config)
-
-    elif env == 'miniworld':
-        state_dim = 2   # direction vector is 2D, no position included
-        action_dim = 4
-
-        dataset_config.update({'rollin_type': 'uniform'})
-
-        increment = 5000
-        starts = np.arange(0, n_envs, increment)
-        starts = np.array(starts)
-        ends = starts + increment - 1
-
-        paths_train = []
-        paths_test = []
-        for start_env_id, end_env_id in zip(starts, ends):
-            path_train = build_miniworld_data_filename(
-                env, start_env_id, end_env_id, dataset_config, mode=0)
-            path_test = build_miniworld_data_filename(
-                env, start_env_id, end_env_id, dataset_config, mode=1)
-
-            paths_train.append(path_train)
-            paths_test.append(path_test)
-
-        filename = build_miniworld_model_filename(env, model_config)
-        print(f"Generate filename: {filename}")
-
     else:
         raise NotImplementedError
 
@@ -192,11 +123,8 @@ if __name__ == '__main__':
         'test': False,
         'store_gpu': True,
     }
-    if env == 'miniworld':
-        config.update({'image_size': 25, 'store_gpu': False})
-        model = ImageTransformer(config).to(device)
-    else:
-        model = Transformer(config).to(device)
+
+    model = Transformer(config).to(device)
 
     params = {
         'batch_size': 64,
@@ -218,39 +146,15 @@ if __name__ == '__main__':
             print(string, file=f)
 
 
-
-
-    if env == 'miniworld':
-        transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
-        ])
-
-
-
-        params.update({'num_workers': 16,
-                'prefetch_factor': 2,
-                'persistent_workers': True,
-                'pin_memory': True,
-                'batch_size': 64,
-                'worker_init_fn': worker_init_fn,
-            })
-
-
-        printw("Loading miniworld data...")
-        train_dataset = ImageDataset(paths_train, config, transform)
-        test_dataset = ImageDataset(paths_test, config, transform)
-        printw("Done loading miniworld data")
-    else:
-        train_dataset = Dataset(path_train, config)
-        test_dataset = Dataset(path_test, config)
+    train_dataset = Dataset(path_train, config)
+    test_dataset = Dataset(path_test, config)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, **params)
     test_loader = torch.utils.data.DataLoader(test_dataset, **params)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
     loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
+    # loss_fn = torch.nn.MSELoss(reduction='sum')
 
     test_loss = []
     train_loss = []
@@ -273,14 +177,13 @@ if __name__ == '__main__':
                     1).repeat(1, pred_actions.shape[1], 1)
                 true_actions = true_actions.reshape(-1, action_dim)
                 pred_actions = pred_actions.reshape(-1, action_dim)
-
+                true_actions = true_actions.argmax(dim=1) #
                 loss = loss_fn(pred_actions, true_actions)
                 epoch_test_loss += loss.item() / horizon
-
         test_loss.append(epoch_test_loss / len(test_dataset))
         end_time = time.time()
-        printw(f"\tTest loss: {test_loss[-1]}")
-        printw(f"\tEval time: {end_time - start_time}")
+        printw(f"Test loss: {test_loss[-1]}")
+        printw(f"Eval time: {end_time - start_time}")
 
 
         # TRAINING
@@ -298,15 +201,16 @@ if __name__ == '__main__':
             pred_actions = pred_actions.reshape(-1, action_dim)
 
             optimizer.zero_grad()
+            true_actions = true_actions.argmax(dim=1) #
             loss = loss_fn(pred_actions, true_actions)
             loss.backward()
             optimizer.step()
             epoch_train_loss += loss.item() / horizon
-
+        # print("")
         train_loss.append(epoch_train_loss / len(train_dataset))
         end_time = time.time()
-        printw(f"\tTrain loss: {train_loss[-1]}")
-        printw(f"\tTrain time: {end_time - start_time}")
+        printw(f"Train loss: {train_loss[-1]}")
+        printw(f"Train time: {end_time - start_time}")
 
 
         # LOGGING
@@ -319,7 +223,7 @@ if __name__ == '__main__':
             printw(f"Epoch: {epoch + 1}")
             printw(f"Test Loss:        {test_loss[-1]}")
             printw(f"Train Loss:       {train_loss[-1]}")
-            printw("\n")
+            printw("")
 
             plt.yscale('log')
             plt.plot(train_loss[1:], label="Train Loss")

@@ -1,7 +1,7 @@
 
 def add_dataset_args(parser):
     parser.add_argument("--envs", type=int, required=False,
-                        default=100000, help="Envs")
+                        default=100000, help="Envs") # The size of pretrained dataset 
     parser.add_argument("--envs_eval", type=int, required=False,
                         default=100, help="Eval Envs")
     parser.add_argument("--hists", type=int, required=False,
@@ -43,7 +43,7 @@ def add_model_args(parser):
 
 def add_train_args(parser):
     parser.add_argument("--num_epochs", type=int, required=False,
-                        default=1000, help="Number of epochs")
+                        default=200, help="Number of epochs")
 
 
 def add_eval_args(parser):

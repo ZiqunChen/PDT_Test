@@ -83,7 +83,7 @@ if __name__ == '__main__':
     }
     if envname == 'bandit':
         state_dim = 1
-
+        
         model_config.update({'var': var, 'cov': cov})
         filename = build_bandit_model_filename(envname, model_config)
         bandit_type = 'uniform'
@@ -113,12 +113,11 @@ if __name__ == '__main__':
     model = Transformer(config).to(device)
     
     tmp_filename = filename
-    if epoch < 0:
-        model_path = f'models/{tmp_filename}.pt'
-    else:
-        # model_path = f'models/{tmp_filename}_epoch{epoch}.pt'
-        model_path = f'models/{tmp_filename}.pt'
-    
+    model_path = f'FL_local_models/{tmp_filename}.pt'
+    # if epoch < 0:
+    #     model_path = f'FL_local_models/{tmp_filename}.pt'
+    # else:
+    #     model_path = f'FL_local_models/{tmp_filename}_epoch{epoch}.pt'
     
     
     checkpoint = torch.load(model_path)
@@ -144,7 +143,7 @@ if __name__ == '__main__':
     n_eval = min(n_eval, len(eval_trajs))
 
 
-    evals_filename = f"evals_epoch{epoch}"
+    evals_filename = f"FL_evals"
     if not os.path.exists(f'figs/{evals_filename}'):
         os.makedirs(f'figs/{evals_filename}', exist_ok=True)
     if not os.path.exists(f'figs/{evals_filename}/bar'):

@@ -80,7 +80,8 @@ class Dataset(torch.utils.data.Dataset):
             'optimal_actions': self.dataset['optimal_actions'][index],
             'zeros': self.zeros,
         }
-
+        # 重新排列，用于增强模型的鲁棒性，特别是在训练时，它可以防止模型过拟合到固定的时间步序列。
+        # 通过打乱时间步的顺序，模型在学习时必须依赖于各个时间步的具体特征，而不是某种固定的序列模式，从而提高模型的泛化能力。
         if self.shuffle:
             perm = torch.randperm(self.horizon)
             res['context_states'] = res['context_states'][perm]
@@ -91,55 +92,3 @@ class Dataset(torch.utils.data.Dataset):
         return res
 
 
-class ImageDataset(Dataset):
-    """"Dataset class for image-based data."""
-
-    def __init__(self, paths, config, transform):
-        config['store_gpu'] = False
-        super().__init__(paths, config)
-        self.transform = transform
-        self.config = config
-
-        context_filepaths = []
-        query_images = []
-
-        for traj in self.trajs:
-            context_filepaths.append(traj['context_images'])
-            query_image = self.transform(traj['query_image']).float()
-            query_images.append(query_image)
-
-        self.dataset.update({
-            'context_filepaths': context_filepaths,
-            'query_images': torch.stack(query_images),
-        })
-
-    def __getitem__(self, index):
-        'Generates one sample of data'
-        filepath = self.dataset['context_filepaths'][index]
-        context_images = np.load(filepath)
-        context_images = [self.transform(images) for images in context_images]
-        context_images = torch.stack(context_images).float()
-
-        query_images = self.dataset['query_images'][index]
-
-        res = {
-            'context_images': context_images,#.to(device),
-            'context_states': self.dataset['context_states'][index],
-            'context_actions': self.dataset['context_actions'][index],
-            'context_next_states': self.dataset['context_next_states'][index],
-            'context_rewards': self.dataset['context_rewards'][index],
-            'query_images': query_images,#.to(device),
-            'query_states': self.dataset['query_states'][index],
-            'optimal_actions': self.dataset['optimal_actions'][index],
-            'zeros': self.zeros,
-        }
-
-        if self.shuffle:
-            perm = torch.randperm(self.horizon)
-            res['context_images'] = res['context_images'][perm]
-            res['context_states'] = res['context_states'][perm]
-            res['context_actions'] = res['context_actions'][perm]
-            res['context_next_states'] = res['context_next_states'][perm]
-            res['context_rewards'] = res['context_rewards'][perm]
-
-        return res

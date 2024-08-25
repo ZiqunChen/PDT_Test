@@ -134,7 +134,7 @@ def online(eval_trajs, model, n_eval, horizon, var, bandit_type):
         batch_size=len(envs))
     cum_means = deploy_online_vec(vec_env, controller, horizon).T
     assert cum_means.shape[0] == n_eval
-    all_means['Lnr'] = cum_means
+    all_means['PDT'] = cum_means
 
 
     controller = EmpMeanPolicy(
@@ -144,14 +144,6 @@ def online(eval_trajs, model, n_eval, horizon, var, bandit_type):
     cum_means = deploy_online_vec(vec_env, controller, horizon).T
     assert cum_means.shape[0] == n_eval
     all_means['Emp'] = cum_means
-
-    controller = UCBPolicy(
-        envs[0],
-        const=1.0,
-        batch_size=len(envs))
-    cum_means = deploy_online_vec(vec_env, controller, horizon).T
-    assert cum_means.shape[0] == n_eval
-    all_means['UCB1.0'] = cum_means
 
     controller = ThompsonSamplingPolicy(
         envs[0],
@@ -163,8 +155,15 @@ def online(eval_trajs, model, n_eval, horizon, var, bandit_type):
         batch_size=len(envs))
     cum_means = deploy_online_vec(vec_env, controller, horizon).T
     assert cum_means.shape[0] == n_eval
-    all_means['Thomp'] = cum_means
-
+    all_means['TS'] = cum_means
+    
+    controller = UCBPolicy(
+        envs[0],
+        const=1.0,
+        batch_size=len(envs))
+    cum_means = deploy_online_vec(vec_env, controller, horizon).T
+    assert cum_means.shape[0] == n_eval
+    all_means['UCB'] = cum_means
 
     all_means = {k: np.array(v) for k, v in all_means.items()}
     all_means_diff = {k: all_means['opt'] - v for k, v in all_means.items()}
@@ -176,37 +175,43 @@ def online(eval_trajs, model, n_eval, horizon, var, bandit_type):
     cumulative_regret = {k: np.cumsum(v, axis=1) for k, v in all_means_diff.items()}
     regret_means = {k: np.mean(v, axis=0) for k, v in cumulative_regret.items()}
     regret_sems = {k: scipy.stats.sem(v, axis=0) for k, v in cumulative_regret.items()}
-
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-
-
-    for key in means.keys():
-        if key == 'opt':
-            ax1.plot(means[key], label=key, linestyle='--',
-                    color='black', linewidth=2)
-            ax1.fill_between(np.arange(horizon), means[key] - sems[key], means[key] + sems[key], alpha=0.2, color='black')
-        else:
-            ax1.plot(means[key], label=key)
-            ax1.fill_between(np.arange(horizon), means[key] - sems[key], means[key] + sems[key], alpha=0.2)
+    # np.save('regret_means_central_online.npy', regret_means)
+    # np.save('regret_sems_central_online.npy', regret_sems)
+    # fig, (ax2) = plt.subplots(1, 2, figsize=(8, 6))
 
 
-    ax1.set_yscale('log')
-    ax1.set_xlabel('Episodes')
-    ax1.set_ylabel('Suboptimality')
-    ax1.set_title('Online Evaluation')
-    ax1.legend()
+    # for key in means.keys():
+    #     if key == 'opt':
+    #         ax1.plot(means[key], label=key, linestyle='--',
+    #                 color='black', linewidth=2)
+    #         ax1.fill_between(np.arange(horizon), means[key] - sems[key], means[key] + sems[key], alpha=0.2, color='black')
+    #     else:
+    #         ax1.plot(means[key], label=key)
+    #         ax1.fill_between(np.arange(horizon), means[key] - sems[key], means[key] + sems[key], alpha=0.2)
 
 
+    # ax1.set_yscale('log')
+    # ax1.set_xlabel('Episodes')
+    # ax1.set_ylabel('Suboptimality')
+    # ax1.set_title('Online Evaluation')
+    # ax1.legend()
+
+    plt.figure(figsize=(8,6))
     for key in regret_means.keys():
         if key != 'opt':
-            ax2.plot(regret_means[key], label=key)
-            ax2.fill_between(np.arange(horizon), regret_means[key] - regret_sems[key], regret_means[key] + regret_sems[key], alpha=0.2)
-
+            plt.plot(np.array(regret_means[key]), label=key)
+            plt.fill_between(np.arange(horizon), np.array(regret_means[key] - regret_sems[key]), np.array(regret_means[key] + regret_sems[key]), alpha=0.2)
+    # regret_means_central = np.load('regret_means_central_online.npy',allow_pickle=True).item()
+    # regret_sems_central = np.load('regret_sems_central_online.npy',allow_pickle=True).item()
+    # for key in regret_means_central.keys():
+    #     if key != 'opt' and key == 'PDT':
+    #         plt.plot(regret_means_central[key], label=key, color = 'orange')
+    #         plt.fill_between(np.arange(horizon), regret_means_central[key] - regret_sems_central[key], regret_means_central[key] + regret_sems_central[key], alpha=0.2,color = 'orange')
     # ax2.set_yscale('log')
-    ax2.set_xlabel('Episodes')
-    ax2.set_ylabel('Cumulative Regret')
-    ax2.set_title('Regret Over Time')
-    ax2.legend()
+    plt.xlabel('Episodes')
+    plt.ylabel('Cumulative Regret')
+    # plt.title('Regret Over Time')
+    plt.legend()
 
 
 
@@ -287,10 +292,10 @@ def offline(eval_trajs, model, n_eval, horizon, var, bandit_type):
 
     baselines = {
         'opt': np.array(rs_opt),
-        'lnr': np.array(rs_lnr),
-        'emp': np.array(rs_emp),
-        'thmp': np.array(rs_thmp),
-        'lcb': np.array(rs_lcb),
+        'PDT': np.array(rs_lnr),
+        'Emp': np.array(rs_emp),
+        'TS': np.array(rs_thmp),
+        'UCB': np.array(rs_lcb),
     }    
     baselines_means = {k: np.mean(v) for k, v in baselines.items()}
     colors = plt.cm.viridis(np.linspace(0, 1, len(baselines_means)))
@@ -321,13 +326,20 @@ def offline_graph(eval_trajs, model, n_eval, horizon, var, bandit_type):
         sems = {k: scipy.stats.sem(v, axis=0) for k, v in baselines.items()}
         all_means.append(means)
 
-
+    plt.figure(figsize=(8,6))
     for key in means.keys():
         if not key == 'opt':
             regrets = [all_means[i]['opt'] - all_means[i][key] for i in range(len(horizons))]            
-            plt.plot(horizons, regrets, label=key)
-            plt.fill_between(horizons, regrets - sems[key], regrets + sems[key], alpha=0.2)
+            plt.plot(horizons, np.array(regrets), label=key)
+            plt.fill_between(horizons, np.array(regrets - sems[key]), np.array(regrets + sems[key]), alpha=0.2)
 
+    # all_means_central = np.load('all_means_central_offline.npy',allow_pickle=True)
+    # sems_central = np.load('sems_central_offline.npy',allow_pickle=True).item()
+    # for key in means.keys():
+    #     if not key == 'opt':
+    #         regrets = [all_means_central[i]['opt'] - all_means_central[i][key] for i in range(len(horizons))]            
+    #         plt.plot(horizons, regrets, label='PDT', color = 'orange')
+    #         plt.fill_between(horizons, regrets - sems_central[key], regrets + sems_central[key], alpha=0.2, color = 'orange')
     plt.legend()
     plt.yscale('log')
     plt.xlabel('Dataset size')

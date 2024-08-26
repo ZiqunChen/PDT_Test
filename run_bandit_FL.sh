@@ -1,3 +1,4 @@
+# Federated Learning
 # Collect data
 python3 collect_data.py --env bandit --envs 30000 --H 100 --dim 3 --var 0.3 --cov 0.0 --envs_eval 200
 # Train
